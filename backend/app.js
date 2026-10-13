@@ -15,7 +15,14 @@ const app = express();
 
 // Vite dev server runs on 5173 by default.
 // Content-Disposition is exposed so the portal can read the file name of a downloaded transcript.
-app.use(cors({ origin: process.env.CLIENT_ORIGIN || 'http://localhost:5173', exposedHeaders: ['Content-Disposition'] }));
+app.use(cors({
+  origin: [
+    'https://lodgecrest-university-sis.vercel.app',
+    'http://localhost:5173',
+    process.env.CLIENT_ORIGIN
+  ].filter(Boolean),
+  credentials: true
+}));
 app.use(express.json());
 
 // Uploaded student photos, e.g. GET /uploads/<uuid>.png. Names are random, only images are ever
@@ -29,13 +36,28 @@ app.use(
   }),
 );
 
+// Health check (supports both with and without /api)
+app.get('/health', (req, res) => res.json({ status: 'ok', db: mongoose.connection.readyState === 1 }));
 app.get('/api/health', (req, res) => res.json({ status: 'ok', db: mongoose.connection.readyState === 1 }));
+
+// Mount all routes with and without /api prefix for maximum compatibility
+app.use('/auth', authRoutes);
 app.use('/api/auth', authRoutes);
+
+app.use('/students', studentRoutes);
 app.use('/api/students', studentRoutes);
+
+app.use('/users', userRoutes);
 app.use('/api/users', userRoutes);
-app.use('/api/pre-enrollments', preEnrollmentRoutes); // admin approval queue
-app.use('/api/portal', portalRoutes); // student portal: read-only, always the signed-in student
-app.use('/api', recordRoutes); // admin: academic records, grades, attendance, accounts and holds
+
+app.use('/pre-enrollments', preEnrollmentRoutes);
+app.use('/api/pre-enrollments', preEnrollmentRoutes);
+
+app.use('/portal', portalRoutes);
+app.use('/api/portal', portalRoutes);
+
+app.use('/', recordRoutes);
+app.use('/api', recordRoutes);
 
 app.use((req, res) => res.status(404).json({ message: 'Route not found' }));
 
