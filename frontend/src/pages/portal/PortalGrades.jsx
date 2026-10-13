@@ -49,7 +49,7 @@ export default function PortalGrades() {
               <Stat label="Incomplete" value={overall.incomplete.length} tone={overall.incomplete.length ? 'amber' : 'green'} hint={overall.incomplete.map((s) => s.code).join(', ') || 'None'} />
             </div>
 
-            {terms.length === 0 && <Card>You have no grades yet.</Card>}
+            {terms.length === 0 && <Card>You have no classes or grades on record yet. They appear here once you are enrolled and your professors post grades.</Card>}
 
             {terms.map(({ term, rows, standing }) => (
               <Card

@@ -80,6 +80,10 @@ const studentSchema = new mongoose.Schema(
     // What the student was before archiving, so "Restore" puts them back where they were.
     statusBeforeArchive: { type: String, default: '', enum: oneOf(['Enrolled', 'LOA', 'Transferred', 'Graduated'], { allowEmpty: true }) },
 
+    // Set when an administrator generated sample enrollments and grades for this student (demo data).
+    // Only that action sets it; it lets the admin screens say so and offer to remove the sample records.
+    sampleRecordsAt: { type: Date },
+
     // URL path of the uploaded photo, e.g. "/uploads/<uuid>.png" ('' = no photo). Only the upload
     // route sets this; the pattern also stops any other value being stored.
     profilePicture: {

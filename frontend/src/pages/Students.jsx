@@ -15,12 +15,14 @@ import {
 } from '@mui/material'
 import SearchIcon from '@mui/icons-material/Search'
 import AddIcon from '@mui/icons-material/Add'
+import AutoFixHighOutlined from '@mui/icons-material/AutoFixHighOutlined'
 import api from '../api/axios'
 import ToastSnackbar from '../components/ToastSnackbar'
 import { useRouteToast } from '../hooks/useRouteToast'
 import PageHeader from '../components/PageHeader'
 import StudentsTable from '../components/students/StudentsTable'
 import ConfirmDialog from '../components/ConfirmDialog'
+import BackfillDialog from '../components/students/BackfillDialog'
 import PermanentDeleteDialog from '../components/students/PermanentDeleteDialog'
 import TablePager from '../components/TablePager'
 import { useApiList } from '../hooks/useApiList'
@@ -38,6 +40,7 @@ export default function Students() {
   const [course, setCourse] = useState('')
   const [yearLevel, setYearLevel] = useState('')
   const [section, setSection] = useState('')
+  const [backfillOpen, setBackfillOpen] = useState(false)
   const [page, setPage] = useState(1)
   // Archived and transferred students are hidden unless this is switched on.
   const [showInactive, setShowInactive] = useState(false)
@@ -136,9 +139,14 @@ export default function Students() {
         title="Students"
         subtitle="Manage and view all student records."
         action={
-          <Button variant="contained" color="secondary" startIcon={<AddIcon />} onClick={handleAdd}>
-            Add Student
-          </Button>
+          <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+            <Button variant="outlined" startIcon={<AutoFixHighOutlined />} onClick={() => setBackfillOpen(true)}>
+              Fill empty records
+            </Button>
+            <Button variant="contained" color="secondary" startIcon={<AddIcon />} onClick={handleAdd}>
+              Add Student
+            </Button>
+          </Box>
         }
       />
 
@@ -241,6 +249,15 @@ export default function Students() {
         />
       )}
 
+      {backfillOpen && (
+        <BackfillDialog
+          onClose={() => setBackfillOpen(false)}
+          onDone={(message) => {
+            setBackfillOpen(false)
+            setToast({ severity: 'success', message })
+          }}
+        />
+      )}
       <ToastSnackbar toast={toast} onClose={() => setToast(null)} />
     </Box>
   )

@@ -13,6 +13,7 @@ const brand = require('../config/brand');
 const { BASE_COURSES, EXTRA_COURSES } = require('../config/baseCatalog');
 const { UPLOAD_DIR } = require('../middleware/upload');
 const { SUBJECTS, SLOTS } = require('./curriculum');
+const { makeRng, PROFESSORS, TIME_SLOTS } = require('../config/timetable');
 
 const { Student, User, Course, Term, Subject, Offering, Enrollment, Grade, Attendance, Charge, Payment, Hold, PreEnrollment } = models;
 
@@ -20,35 +21,10 @@ const { Student, User, Course, Term, Subject, Offering, Enrollment, Grade, Atten
 // Helpers
 // ----------------------------------------------------------------------------------------------
 
-// Small seeded random generator, so the sample data is the same on every machine.
-function makeRng(seed) {
-  let h = 2166136261;
-  for (let i = 0; i < seed.length; i += 1) h = Math.imul(h ^ seed.charCodeAt(i), 16777619);
-  let a = h >>> 0;
-  return () => {
-    a = (a + 0x6d2b79f5) >>> 0;
-    let t = a;
-    t = Math.imul(t ^ (t >>> 15), t | 1);
-    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
-}
-
 const utc = (y, m, d) => new Date(Date.UTC(y, m, d));
 const isoDay = (date) => date.toISOString().slice(0, 10);
 const addDays = (date, n) => new Date(date.getTime() + n * 86400000);
 const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-
-const PROFESSORS = [
-  'Prof. Ramon Dela Cruz', 'Prof. Liza Navarro', 'Prof. Eduardo Mercado', 'Prof. Maricel Bautista',
-  'Prof. Antonio Villareal', 'Prof. Cynthia Ocampo', 'Prof. Ernesto Salazar', 'Prof. Rosario Tan',
-];
-
-// Class time slots, alternating Mon/Wed/Fri hours and Tue/Thu hour-and-a-half blocks. Offerings in
-// the same section take the next free slot, so a section's schedule never overlaps itself.
-const MWF = [['08:00', '09:00'], ['09:00', '10:00'], ['10:00', '11:00'], ['11:00', '12:00'], ['13:00', '14:00'], ['14:00', '15:00']];
-const TTH = [['08:00', '09:30'], ['09:30', '11:00'], ['11:00', '12:30'], ['13:00', '14:30'], ['14:30', '16:00'], ['16:00', '17:30']];
-const TIME_SLOTS = MWF.flatMap((m, i) => [{ days: ['Mon', 'Wed', 'Fri'], time: m }, { days: ['Tue', 'Thu'], time: TTH[i] }]);
 
 const GRADE_POOL = [1, 1.25, 1.5, 1.75, 2, 2.25, 2.5, 2.75];
 const TUITION_PER_UNIT = 1350;

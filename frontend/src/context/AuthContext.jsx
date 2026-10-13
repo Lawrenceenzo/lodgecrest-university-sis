@@ -46,14 +46,21 @@ export function AuthProvider({ children }) {
     return data.user
   }, [])
 
+  // Changes your own display name (the only part of the account you may edit); returns the updated user.
+  const updateName = useCallback(async (name) => {
+    const { data } = await api.patch('/auth/me', { name })
+    setUser(data)
+    return data
+  }, [])
+
   const logout = useCallback(() => {
     localStorage.removeItem(TOKEN_KEY)
     setUser(null)
   }, [])
 
   const value = useMemo(
-    () => ({ user, loading, requestOtp, verifyOtp, changePassword, logout }),
-    [user, loading, requestOtp, verifyOtp, changePassword, logout],
+    () => ({ user, loading, requestOtp, verifyOtp, changePassword, updateName, logout }),
+    [user, loading, requestOtp, verifyOtp, changePassword, updateName, logout],
   )
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
 }

@@ -4,6 +4,7 @@ import MenuIcon from '@mui/icons-material/Menu'
 import CloseIcon from '@mui/icons-material/Close'
 import Logo from '../components/Logo'
 import Button from '../components/ui/Button'
+import ConfirmModal from '../components/ui/ConfirmModal'
 import { BRAND } from '../config/brand'
 import { assetUrl } from '../api/axios'
 import { useAuth } from '../context/AuthContext'
@@ -27,6 +28,7 @@ const linkClass = ({ isActive }) =>
 export default function StudentLayout() {
   const { user, logout } = useAuth()
   const [menuOpen, setMenuOpen] = useState(false)
+  const [confirmingLogout, setConfirmingLogout] = useState(false)
   const me = useApiData('/portal/me').data
   const displayName = me?.name ?? user?.name
 
@@ -56,7 +58,7 @@ export default function StudentLayout() {
                 {displayName?.[0] ?? 'S'}
               </div>
             )}
-            <Button variant="light" onClick={logout} className="!px-3 !py-1.5">
+            <Button variant="light" onClick={() => setConfirmingLogout(true)} className="!px-3 !py-1.5">
               Sign out
             </Button>
             <button
@@ -85,6 +87,18 @@ export default function StudentLayout() {
       <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-8">
         <Outlet />
       </main>
+
+      <ConfirmModal
+        open={confirmingLogout}
+        title="Sign out?"
+        message="Are you sure you want to sign out?"
+        confirmLabel="Sign out"
+        onCancel={() => setConfirmingLogout(false)}
+        onConfirm={() => {
+          setConfirmingLogout(false)
+          logout()
+        }}
+      />
 
       <footer className="border-t border-navy-100 bg-white py-4 text-center text-xs text-muted">
         {BRAND.name} &middot; Student Portal &middot; Your records are read-only here. Contact the Registrar to change them.

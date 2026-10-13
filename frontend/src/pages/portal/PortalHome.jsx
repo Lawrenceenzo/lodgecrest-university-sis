@@ -103,6 +103,16 @@ export default function PortalHome() {
               </Stat>
             </div>
 
+            {d.currentLoad.subjects === 0 && d.student.academicStatus === 'Enrolled' && (
+              <div className="rounded-md border border-gold-500 bg-gold-50 px-5 py-4 text-sm text-navy-900">
+                <p className="font-semibold">You have no classes this term yet.</p>
+                <p className="mt-1">
+                  Your schedule and grades fill in once the Registrar enrolls you. You can also{' '}
+                  <Link to="/portal/pre-enrollment" className="font-semibold underline underline-offset-2">choose your subjects in Pre-Enrollment</Link> when it is open, or contact the Registrar.
+                </p>
+              </div>
+            )}
+
             <div className="grid gap-6 lg:grid-cols-2">
               <Card title="Needs your attention" subtitle={d.alerts.length ? `${d.alerts.length} ${d.alerts.length === 1 ? 'item' : 'items'}` : undefined}>
                 {d.alerts.length === 0 ? (

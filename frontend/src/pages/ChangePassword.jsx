@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import Alert from '../components/ui/Alert'
 import Button from '../components/ui/Button'
+import ConfirmModal from '../components/ui/ConfirmModal'
 import TextField from '../components/ui/TextField'
 import Logo from '../components/Logo'
 import { useAuth } from '../context/AuthContext'
@@ -26,6 +27,7 @@ export default function ChangePassword() {
   const { user, changePassword, logout } = useAuth()
   const navigate = useNavigate()
   const forced = Boolean(user?.mustChangePassword)
+  const [confirmingLogout, setConfirmingLogout] = useState(false)
 
   const [form, setForm] = useState({ current: '', next: '', confirm: '' })
   const [submitted, setSubmitted] = useState(false)
@@ -98,7 +100,7 @@ export default function ChangePassword() {
           </Button>
 
           {forced ? (
-            <Button variant="link" onClick={logout} className="self-center text-sm font-normal">
+            <Button variant="link" onClick={() => setConfirmingLogout(true)} className="self-center text-sm font-normal">
               Sign out instead
             </Button>
           ) : (
@@ -108,6 +110,14 @@ export default function ChangePassword() {
           )}
         </form>
       </div>
+      <ConfirmModal
+        open={confirmingLogout}
+        title="Sign out?"
+        message="Are you sure you want to sign out?"
+        confirmLabel="Sign out"
+        onCancel={() => setConfirmingLogout(false)}
+        onConfirm={logout}
+      />
     </main>
   )
 }

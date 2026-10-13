@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { Link } from 'react-router-dom'
 import { useApiData } from '../../hooks/useApiData'
 import { Card, DataGate, PageTitle, Pill, Skeleton, TableBox } from '../../components/portal/PortalParts'
 import { td, th } from '../../components/portal/portalStyles'
@@ -48,7 +49,17 @@ export default function PortalSchedule() {
               )}
             </div>
 
-            <Timetable days={d.days} />
+            {d.classes.length === 0 ? (
+              <div className="rounded-md border border-dashed border-navy-100 bg-white px-6 py-12 text-center">
+                <p className="font-serif text-xl text-navy-900">No classes to show</p>
+                <p className="mx-auto mt-1 max-w-md text-sm text-muted">
+                  You are not enrolled in any class for this term yet. Your schedule appears here once the Registrar enrolls you, or{' '}
+                  <Link to="/portal/pre-enrollment" className="font-semibold text-navy-900 underline underline-offset-2">pre-enroll</Link> if it is open.
+                </p>
+              </div>
+            ) : (
+              <Timetable days={d.days} />
+            )}
 
             {d.classes.length > 0 && (
               <Card title="Class list">

@@ -1,6 +1,8 @@
+import { useState } from 'react'
 import { NavLink, useLocation } from 'react-router-dom'
 import { Badge, Box, List, ListItemButton, ListItemIcon, ListItemText } from '@mui/material'
 import LogoutOutlined from '@mui/icons-material/LogoutOutlined'
+import ConfirmDialog from '../components/ConfirmDialog'
 import Logo from '../components/Logo'
 import { useAuth } from '../context/AuthContext'
 import { useApiData } from '../hooks/useApiData'
@@ -26,6 +28,7 @@ const itemSx = {
 
 export default function Sidebar({ onNavigate }) {
   const { logout } = useAuth()
+  const [confirmingLogout, setConfirmingLogout] = useState(false)
   // How many pre-enrollment requests are waiting; re-asked whenever the admin moves to another page.
   const { pathname } = useLocation()
   const waiting = useApiData('/pre-enrollments/summary', { at: pathname }).data?.pending ?? 0
@@ -57,13 +60,25 @@ export default function Sidebar({ onNavigate }) {
       </List>
 
       <List sx={{ py: 1.5, borderTop: '1px solid rgba(255,255,255,0.12)' }}>
-        <ListItemButton onClick={logout} sx={itemSx}>
+        <ListItemButton onClick={() => setConfirmingLogout(true)} sx={itemSx}>
           <ListItemIcon>
             <LogoutOutlined fontSize="small" />
           </ListItemIcon>
           <ListItemText slotProps={{ primary: { fontSize: 14 } }} primary="Logout" />
         </ListItemButton>
       </List>
+      <ConfirmDialog
+        open={confirmingLogout}
+        title="Sign out?"
+        message="Are you sure you want to sign out?"
+        confirmLabel="Sign out"
+        confirmColor="primary"
+        onCancel={() => setConfirmingLogout(false)}
+        onConfirm={() => {
+          setConfirmingLogout(false)
+          logout()
+        }}
+      />
     </Box>
   )
 }

@@ -10,12 +10,13 @@ const requireRole = require('../middleware/roles');
 const { computeStanding } = require('../services/gwa');
 const { computeBalance } = require('../services/accounts');
 const { enrollStudent, dropEnrollment } = require('../services/enrollment');
+const { generateSampleRecords, clearSampleRecords, studentsWithoutRecords } = require('../services/sampleRecords');
 const { termJson, meetingJson, loadRows, groupByTerm, standingInput, describeStanding } = require('../services/records');
 
 const router = express.Router();
 
 // This router is mounted at /api, so the guard is limited to the paths it owns.
-router.use(['/students', '/enrollments', '/attendance', '/charges', '/payments', '/holds', '/terms', '/offerings'], authenticate, requireRole('admin'));
+router.use(['/students', '/enrollments', '/attendance', '/charges', '/payments', '/holds', '/terms', '/offerings', '/sample-records'], authenticate, requireRole('admin'));
 
 // ---------------------------------------------------------------------------------------------
 // Small helpers
@@ -381,6 +382,47 @@ router.post('/holds/:hid/clear', async (req, res) => {
   hold.clearedBy = req.user.id;
   await hold.save();
   return res.json({ id: String(hold._id), status: hold.status, clearedAt: hold.clearedAt });
+});
+
+// ---------------------------------------------------------------------------------------------
+// Sample records: classes and grades for students who have none (demo data, always asked for)
+// ---------------------------------------------------------------------------------------------
+
+const sampleSummary = (r) => ({ ...r, message: `${r.currentClasses} class${r.currentClasses === 1 ? '' : 'es'} this term, ${r.termsCompleted} earlier semester${r.termsCompleted === 1 ? '' : 's'} with ${r.gradesPosted} grades.` });
+
+// POST /api/students/:id/sample-records  { history? }  -> this term's standard classes, plus completed earlier semesters when history is true
+router.post('/students/:id/sample-records', async (req, res) => {
+  const student = await loadStudent(req, res);
+  if (!student || refuseIfArchived(student, res)) return undefined;
+  const result = await generateSampleRecords(student._id, { history: req.body?.history === true, actorId: req.user.id });
+  return res.status(201).json(sampleSummary(result));
+});
+
+// DELETE /api/students/:id/sample-records  -> take the generated records away again
+router.delete('/students/:id/sample-records', async (req, res) => {
+  const student = await loadStudent(req, res);
+  if (!student || refuseIfArchived(student, res)) return undefined;
+  return res.json(await clearSampleRecords(student._id));
+});
+
+// GET /api/sample-records/pending -> who has no classes at all
+router.get('/sample-records/pending', async (req, res) => {
+  const students = await studentsWithoutRecords();
+  return res.json({ count: students.length, students: students.slice(0, 50).map((s) => ({ id: String(s._id), studentId: s.studentId, name: `${s.lastName}, ${s.firstName}`, course: s.course, yearLevel: s.yearLevel })) });
+});
+
+// POST /api/sample-records/backfill  { history? }  -> give every one of them records (history defaults to true)
+router.post('/sample-records/backfill', async (req, res) => {
+  const history = req.body?.history !== false;
+  const results = [];
+  for (const s of await studentsWithoutRecords()) {
+    try {
+      results.push({ studentId: s.studentId, ok: true, ...sampleSummary(await generateSampleRecords(s._id, { history, actorId: req.user.id })) });
+    } catch (err) {
+      results.push({ studentId: s.studentId, ok: false, message: err.message });
+    }
+  }
+  return res.json({ processed: results.length, succeeded: results.filter((r) => r.ok).length, results });
 });
 
 module.exports = router;

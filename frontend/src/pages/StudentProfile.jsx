@@ -234,7 +234,7 @@ export default function StudentProfile() {
               ) : tab === 1 ? (
                 <AcademicInfoTab student={student} />
               ) : tab === 2 ? (
-                <EnrollmentHistoryTab student={student} readOnly={archived} notify={setToast} />
+                <EnrollmentHistoryTab student={student} readOnly={archived} notify={setToast} onStudentChanged={refresh} />
               ) : tab === 3 ? (
                 <GradesTab student={student} readOnly={archived} notify={setToast} />
               ) : tab === 4 ? (

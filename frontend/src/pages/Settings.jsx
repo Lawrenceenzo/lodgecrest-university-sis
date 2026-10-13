@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Box, Button, FormControlLabel, Paper, Switch, TextField, Typography } from '@mui/material'
+import { Alert, Box, Button, FormControlLabel, Paper, Switch, TextField, Typography } from '@mui/material'
 import SaveOutlined from '@mui/icons-material/SaveOutlined'
 import KeyOutlined from '@mui/icons-material/KeyOutlined'
 import { Link as RouterLink } from 'react-router-dom'
@@ -9,6 +9,7 @@ import { FormSelect } from '../components/FormControls'
 import FormField from '../components/students/FormField'
 import { cardSx } from '../components/tableStyles'
 import { useAuth } from '../context/AuthContext'
+import { normalizeName, validateDisplayName } from '../utils/account'
 
 const YEARS = ['2026-2027', '2025-2026', '2024-2025'].map((y) => ({ value: y, label: y.replace('-', ' - ') }))
 const SEMESTERS = ['1st Semester', '2nd Semester', 'Summer'].map((s) => ({ value: s, label: s }))
@@ -18,6 +19,9 @@ const NOTIFICATIONS = [
   { key: 'enrollment', label: 'Enrollment alerts', hint: 'Notify me when a student is enrolled or removed.' },
   { key: 'attendance', label: 'Attendance alerts', hint: 'Notify me about unusually low attendance.' },
 ]
+
+// Locked fields stay readable: the browser's default for disabled text is too faint.
+const lockedSx = { '& .MuiInputBase-input.Mui-disabled': { WebkitTextFillColor: '#5b6477' }, '& .MuiInputBase-root.Mui-disabled': { bgcolor: '#f5f6fa' } }
 
 function Section({ title, description, children }) {
   return (
@@ -34,7 +38,11 @@ function Section({ title, description, children }) {
 }
 
 export default function Settings() {
-  const { user } = useAuth()
+  const { user, updateName } = useAuth()
+  const [name, setName] = useState(user?.name ?? '')
+  const [nameTouched, setNameTouched] = useState(false)
+  const [serverError, setServerError] = useState('')
+  const [saving, setSaving] = useState(false)
   const [academic, setAcademic] = useState({ year: '2026-2027', semester: '1st Semester' })
   const [notify, setNotify] = useState({ email: true, enrollment: true, attendance: false })
   const [toast, setToast] = useState(null)
@@ -45,7 +53,33 @@ export default function Settings() {
     setToast({ severity: 'success', message: 'Notification preferences updated' })
   }
 
-  const readOnly = { input: { readOnly: true } }
+  const nameError = nameTouched ? validateDisplayName(name) : ''
+  const dirty = normalizeName(name) !== (user?.name ?? '')
+
+  // Only the display name can be saved. The other fields are locked (disabled), and the server refuses them too.
+  const save = async () => {
+    setNameTouched(true)
+    setServerError('')
+    if (validateDisplayName(name)) {
+      document.getElementById('settings-name')?.focus()
+      return
+    }
+    if (!dirty) {
+      setToast({ severity: 'info', message: 'There is nothing to save.' })
+      return
+    }
+    setSaving(true)
+    try {
+      const updated = await updateName(normalizeName(name))
+      setName(updated.name)
+      setNameTouched(false)
+      setToast({ severity: 'success', message: 'Your name was updated.' })
+    } catch (err) {
+      setServerError(err.response?.data?.errors?.join(', ') || err.response?.data?.message || 'Could not save. Is the backend running?')
+    } finally {
+      setSaving(false)
+    }
+  }
 
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
@@ -54,23 +88,34 @@ export default function Settings() {
         title="Settings"
         subtitle="Manage your account and system preferences."
         action={
-          <Button variant="contained" color="secondary" startIcon={<SaveOutlined />} onClick={() => setToast({ severity: 'success', message: 'Settings saved.' })}>
-            Save Changes
+          <Button variant="contained" color="secondary" startIcon={<SaveOutlined />} onClick={save} disabled={saving}>
+            {saving ? 'Saving…' : 'Save Changes'}
           </Button>
         }
       />
 
       <Box sx={{ display: 'grid', gap: 3, gridTemplateColumns: { xs: '1fr', lg: '1fr 1fr' }, alignItems: 'start' }}>
-        <Section title="Account" description="Your sign-in details. Contact another administrator to change them.">
+        <Section title="Account" description="You can change your display name. Your sign-in e-mail and role are fixed; ask another administrator to change them.">
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2.5 }}>
-            <FormField id="settings-name" label="Name">
-              <TextField id="settings-name" size="small" fullWidth value={user?.name ?? ''} slotProps={readOnly} />
+            {serverError && <Alert severity="error">{serverError}</Alert>}
+            <FormField id="settings-name" label="Name" required error={nameError}>
+              <TextField
+                id="settings-name"
+                size="small"
+                fullWidth
+                value={name}
+                error={Boolean(nameError)}
+                onChange={(e) => setName(e.target.value)}
+                onBlur={() => setNameTouched(true)}
+                helperText={nameError ? undefined : '2 to 60 characters: letters, spaces, apostrophes, hyphens and periods.'}
+                slotProps={{ htmlInput: { maxLength: 60, autoComplete: 'name' } }}
+              />
             </FormField>
             <FormField id="settings-email" label="Email">
-              <TextField id="settings-email" size="small" fullWidth value={user?.email ?? ''} slotProps={readOnly} />
+              <TextField id="settings-email" size="small" fullWidth value={user?.email ?? ''} disabled sx={lockedSx} helperText="Login codes are sent to this address, so it cannot be changed here." />
             </FormField>
             <FormField id="settings-role" label="Role">
-              <TextField id="settings-role" size="small" fullWidth value={user?.roleLabel ?? ''} slotProps={readOnly} />
+              <TextField id="settings-role" size="small" fullWidth value={user?.roleLabel ?? ''} disabled sx={lockedSx} />
             </FormField>
             <Button component={RouterLink} to="/change-password" variant="outlined" startIcon={<KeyOutlined />} sx={{ alignSelf: 'flex-start' }}>
               Change password

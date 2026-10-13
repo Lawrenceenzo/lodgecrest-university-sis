@@ -161,6 +161,25 @@ router.get('/me', authenticate.allowPasswordChange, (req, res) => {
   res.json(req.user);
 });
 
+// PATCH /api/auth/me  { name } -> change your own display name. Nothing else about the account can be
+// changed here: the sign-in e-mail, role and student link are fixed (an e-mail change would redirect
+// every login code), so sending a different value is refused instead of quietly ignored.
+const NAME_RE = /^[\p{L}][\p{L}\s.'-]*$/u;
+router.patch('/me', authenticate, requireRole('admin'), async (req, res) => {
+  const body = req.body || {};
+  const locked = ['email', 'role', 'student', 'studentId', 'password'].filter((k) => k in body);
+  if (locked.length) return res.status(400).json({ message: `${locked.join(', ')} cannot be changed here.`, errors: locked.map((k) => `${k} is read-only`) });
+
+  const name = typeof body.name === 'string' ? body.name.trim().replace(/\s+/g, ' ') : '';
+  const errors = [];
+  if (name.length < 2 || name.length > 60) errors.push('name must be 2-60 characters');
+  else if (!NAME_RE.test(name)) errors.push("name may contain letters, spaces, apostrophes, hyphens and periods only");
+  if (errors.length) return res.status(400).json({ message: 'Validation failed', errors });
+
+  const user = await User.findByIdAndUpdate(req.user.id, { $set: { name } }, { returnDocument: 'after', runValidators: true });
+  return res.json(user.toJSON());
+});
+
 // POST /api/auth/change-password  { currentPassword, newPassword } -> { token, user }
 // Open to every role, including accounts that still hold a temporary password. Returns a fresh
 // token because the change invalidates all earlier ones.
