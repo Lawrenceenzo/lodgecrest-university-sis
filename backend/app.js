@@ -8,6 +8,7 @@ const studentRoutes = require('./routes/students');
 const userRoutes = require('./routes/users');
 const recordRoutes = require('./routes/records');
 const portalRoutes = require('./routes/portal');
+const catalogRoutes = require('./routes/catalog');
 const preEnrollmentRoutes = require('./routes/preEnrollments');
 const { UPLOAD_DIR } = require('./middleware/upload');
 
@@ -57,6 +58,7 @@ app.use('/portal', portalRoutes);
 app.use('/api/portal', portalRoutes);
 
 app.use('/', recordRoutes);
+app.use('/api', catalogRoutes); // admin catalog: courses, subjects, teachers, sections
 app.use('/api', recordRoutes);
 
 app.use((req, res) => res.status(404).json({ message: 'Route not found' }));

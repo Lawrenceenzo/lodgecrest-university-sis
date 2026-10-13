@@ -28,7 +28,8 @@ import TablePager from '../components/TablePager'
 import { useApiList } from '../hooks/useApiList'
 import { useDebouncedValue } from '../hooks/useDebouncedValue'
 import { pageWindow } from '../utils/paginate'
-import { COURSES, SECTIONS, YEAR_LEVELS, fullName } from '../utils/students'
+import { useCourseOptions } from '../hooks/useCourseOptions'
+import { SECTIONS, YEAR_LEVELS, fullName } from '../utils/students'
 
 const PAGE_SIZE = 5
 
@@ -36,6 +37,7 @@ const selectSx = { minWidth: 150, fontSize: 13, bgcolor: '#fff' }
 
 export default function Students() {
   const navigate = useNavigate()
+  const courseCodes = useCourseOptions().codes
   const [search, setSearch] = useState('')
   const [course, setCourse] = useState('')
   const [yearLevel, setYearLevel] = useState('')
@@ -172,7 +174,7 @@ export default function Students() {
               },
             }}
           />
-          {filterSelect(course, setCourse, 'Courses', COURSES)}
+          {filterSelect(course, setCourse, 'Courses', courseCodes)}
           {filterSelect(yearLevel, setYearLevel, 'Year Levels', YEAR_LEVELS)}
           {filterSelect(section, setSection, 'Sections', SECTIONS)}
           <FormControlLabel

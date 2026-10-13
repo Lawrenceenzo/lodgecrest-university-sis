@@ -15,7 +15,7 @@ const { UPLOAD_DIR } = require('../middleware/upload');
 const { SUBJECTS, SLOTS } = require('./curriculum');
 const { makeRng, PROFESSORS, TIME_SLOTS } = require('../config/timetable');
 
-const { Student, User, Course, Term, Subject, Offering, Enrollment, Grade, Attendance, Charge, Payment, Hold, PreEnrollment } = models;
+const { Student, User, Course, Term, Subject, Offering, Enrollment, Grade, Attendance, Charge, Payment, Hold, PreEnrollment, Teacher, Section } = models;
 
 // ----------------------------------------------------------------------------------------------
 // Helpers
@@ -110,6 +110,22 @@ async function runSeed({ log = console.log } = {}) {
   }
   await Student.collection.insertMany(studentDocs);
   const studentByNumber = Object.fromEntries(studentDocs.map((s) => [s.studentId, s]));
+
+  // ---- Faculty and class sections (every section the sample students sit in has an adviser) -------
+  const DEPARTMENTS = ['College of Computing', 'College of Computing', 'College of Business', 'College of Computing', 'College of Engineering', 'College of Business', 'College of Arts and Sciences', 'College of Computing'];
+  const teacherDocs = await Teacher.insertMany(
+    PROFESSORS.map((full, i) => {
+      const name = full.replace(/^Prof\.\s*/, '');
+      return { employeeId: `EMP-${String(i + 1).padStart(4, '0')}`, name, department: DEPARTMENTS[i % DEPARTMENTS.length], email: `${name.toLowerCase().replace(/[^a-z ]/g, '').replace(/\s+/g, '.')}@${brand.domain}` };
+    }),
+  );
+  const sectionKeys = [...new Set(seedStudents.filter((s) => s.course && s.yearLevel && s.section).map((s) => `${s.course}|${s.yearLevel}|${s.section}`))].sort();
+  await Section.insertMany(
+    sectionKeys.map((key, i) => {
+      const [course, yearLevel, name] = key.split('|');
+      return { course: courseByCode[course]._id, yearLevel, name, adviser: teacherDocs[i % teacherDocs.length]._id };
+    }),
+  );
 
   const maria = studentByNumber['2026-0001'];
   const studentEmail = (process.env.SEED_STUDENT_EMAIL || maria.email).toLowerCase();
@@ -305,6 +321,8 @@ async function runSeed({ log = console.log } = {}) {
     charges: chargeInputs.length,
     payments: paymentInputs.length,
     holds: 3,
+    teachers: teacherDocs.length,
+    sections: sectionKeys.length,
     'pre-enrollment requests': requestInputs.length,
   };
   log(`Seeded: ${Object.entries(summary).map(([k, v]) => `${v} ${k}`).join(', ')}.`);

@@ -6,11 +6,11 @@ import api from '../api/axios'
 import BackHeader from '../components/BackHeader'
 import { FormSelect } from '../components/FormControls'
 import { useApiList } from '../hooks/useApiList'
-import { COURSES, COURSE_NAMES, SECTIONS, YEAR_LEVELS, fullName } from '../utils/students'
+import { useCourseOptions } from '../hooks/useCourseOptions'
+import { SECTIONS, YEAR_LEVELS, fullName } from '../utils/students'
 
 const EMPTY = { studentId: '', course: '', yearLevel: '', section: '' }
 
-const COURSE_OPTIONS = COURSES.map((c) => ({ value: c, label: `${c} - ${COURSE_NAMES[c]}` }))
 const YEAR_OPTIONS = YEAR_LEVELS.map((y) => ({ value: y, label: y }))
 const SECTION_OPTIONS = SECTIONS.map((s) => ({ value: s, label: `Section ${s}` }))
 
@@ -25,6 +25,7 @@ function validate(f) {
 
 export default function NewEnrollment() {
   const navigate = useNavigate()
+  const courseOptions = useCourseOptions().options // the course catalog from the database
   const { rows: pending, loading, error, reload } = useApiList('/students', { status: 'Pending' })
 
   const [form, setForm] = useState(EMPTY)
@@ -152,7 +153,7 @@ export default function NewEnrollment() {
               {...bind('studentId')}
               onChange={onStudentChange}
             />
-            <FormSelect label="Course" required options={COURSE_OPTIONS} {...bind('course')} />
+            <FormSelect label="Course" required options={courseOptions} {...bind('course')} />
             <Box sx={{ display: 'grid', gap: 2.5, gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)' } }}>
               <FormSelect label="Year Level" required options={YEAR_OPTIONS} {...bind('yearLevel')} />
               <FormSelect label="Section" required options={SECTION_OPTIONS} {...bind('section')} />

@@ -33,13 +33,15 @@ import { useDebouncedValue } from '../hooks/useDebouncedValue'
 import { useRouteToast } from '../hooks/useRouteToast'
 import { SEMESTERS } from '../data/mockData'
 import { pageWindow } from '../utils/paginate'
-import { COURSES, SECTIONS, YEAR_LEVELS, enrollmentId, fullName } from '../utils/students'
+import { useCourseOptions } from '../hooks/useCourseOptions'
+import { SECTIONS, YEAR_LEVELS, enrollmentId, fullName } from '../utils/students'
 
 const PAGE_SIZE = 5
 const COLUMNS = ['Enrollment ID', 'Student ID', 'Name', 'Course', 'Year Level', 'Section', 'Semester', 'Status', 'Actions']
 
 export default function Enrollment() {
   const navigate = useNavigate()
+  const courseCodes = useCourseOptions().codes
   const [search, setSearch] = useState('')
   const [course, setCourse] = useState('')
   const [yearLevel, setYearLevel] = useState('')
@@ -98,7 +100,7 @@ export default function Enrollment() {
       <Paper elevation={0} sx={cardSx}>
         <Box sx={filterRowSx}>
           <SearchField value={search} onChange={onFilter(setSearch)} placeholder="Search by student name or ID…" />
-          <FilterSelect value={course} onChange={onFilter(setCourse)} label="Courses" options={COURSES} />
+          <FilterSelect value={course} onChange={onFilter(setCourse)} label="Courses" options={courseCodes} />
           <FilterSelect value={yearLevel} onChange={onFilter(setYearLevel)} label="Year Levels" options={YEAR_LEVELS} />
           <FilterSelect
             value={section}
