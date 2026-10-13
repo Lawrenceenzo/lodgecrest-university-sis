@@ -1,0 +1,44 @@
+@import '@fontsource-variable/inter/wght.css';
+@import '@fontsource-variable/playfair-display/wght.css';
+@import 'tailwindcss';
+
+/*
+  Lodgecrest design tokens. Tailwind turns each --color-* / --font-* variable into utilities
+  (bg-navy-900, text-gold-700, font-serif ...). src/theme.js mirrors the same values for MUI.
+*/
+@theme {
+  --font-sans: 'Inter Variable', ui-sans-serif, system-ui, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  --font-serif: 'Playfair Display Variable', Georgia, 'Times New Roman', serif;
+
+  /* Deep navy - brand colour is navy-900 (#0f204b) */
+  --color-navy-950: #0a1736;
+  --color-navy-900: #0f204b;
+  --color-navy-800: #172d63;
+  --color-navy-700: #223b7a;
+  --color-navy-100: #e2e7f1;
+  --color-navy-50: #f4f6fa;
+
+  /* Gold / mustard - brand colour is gold-500 (#b89047). Use gold-700 for gold TEXT on white:
+     gold-500 on white is only ~3:1, below the 4.5:1 needed for small text. */
+  --color-gold-700: #8a6a2c;
+  --color-gold-600: #a07c35;
+  --color-gold-500: #b89047;
+  --color-gold-400: #c9a35a;
+  --color-gold-100: #f4ecdb;
+  --color-gold-50: #faf6ec;
+
+  --color-ink: #1b2233;
+  --color-muted: #5b6477;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  font-family: var(--font-sans);
+  color: var(--color-ink);
+}

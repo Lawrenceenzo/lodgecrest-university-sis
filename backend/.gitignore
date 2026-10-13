@@ -1,0 +1,5 @@
+node_modules
+.env
+# uploaded photos (keep the folder, ignore its contents)
+public/uploads/*
+!public/uploads/.gitkeep
