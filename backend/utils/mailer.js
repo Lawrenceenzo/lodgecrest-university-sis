@@ -7,11 +7,16 @@ let transporter;
 function getTransporter() {
   if (!transporter) {
     transporter = nodemailer.createTransport({
-      service: 'gmail',
+      host: 'smtp.gmail.com',
+      port: 587,
+      secure: false, // true for 465, false for other ports
       auth: {
         user: process.env.EMAIL_USER,
         // Gmail shows app passwords as "abcd efgh ijkl mnop"; the spaces aren't part of it.
         pass: process.env.EMAIL_PASS.replace(/\s+/g, ''),
+      },
+      tls: {
+        rejectUnauthorized: false,
       },
     });
   }
