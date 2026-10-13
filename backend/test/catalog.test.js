@@ -229,4 +229,40 @@ describe('catalog persistence', { skip }, () => {
     assert.equal(moved.status, 200);
     assert.equal(String((await Student.findById(id)).program), course.json.id);
   });
+
+  test('dashboard totals are counted from the collections, and follow every change', async () => {
+    const stats = async () => (await call('GET', '/dashboard/stats')).json;
+    const real = async () => ({
+      students: await Student.countDocuments({ academicStatus: { $nin: ['Archived', 'Transferred'] } }),
+      teachers: await Teacher.countDocuments(),
+      courses: await Course.countDocuments(),
+      sections: await Section.countDocuments(),
+    });
+
+    const first = await stats();
+    assert.deepEqual({ students: first.students, teachers: first.teachers, courses: first.courses, sections: first.sections }, await real());
+    assert.ok(first.teachers >= 8 && first.teachers !== 120, 'the real number of teachers, not a made-up 120');
+    assert.ok(first.activeTeachers <= first.teachers);
+
+    // Adding things moves the numbers by exactly one each.
+    const teacher = await call('POST', '/teachers', { name: 'Counter Teacher', department: 'College of Computing', email: 'counter@lodgecrest.edu' });
+    const course = await call('POST', '/courses', { code: 'CNT1', name: 'Counting', department: 'College of Computing', totalUnits: 100 });
+    const section = await call('POST', '/sections', { course: 'CNT1', yearLevel: '1st Year', section: 'A', adviserId: teacher.json.id });
+    const student = await call('POST', '/students', { firstName: 'Count', lastName: 'Me', dob: '2005-01-02', gender: 'Male', email: 'count.me@example.test', contactNumber: '09171234567', address: 'Imus, Cavite' });
+    const after = await stats();
+    assert.deepEqual([after.teachers, after.courses, after.sections, after.students], [first.teachers + 1, first.courses + 1, first.sections + 1, first.students + 1]);
+    assert.deepEqual({ students: after.students, teachers: after.teachers, courses: after.courses, sections: after.sections }, await real());
+
+    // Archiving a student takes them out of the count; deleting a section, teacher and course too.
+    assert.equal((await call('DELETE', `/students/${student.json.id}`)).status, 200);
+    assert.equal((await stats()).students, first.students);
+    assert.equal((await call('DELETE', `/sections/${section.json.id}`)).status, 200);
+    assert.equal((await call('DELETE', `/teachers/${teacher.json.id}`)).status, 200);
+    assert.equal((await call('DELETE', `/courses/${course.json.id}`)).status, 200);
+    const end = await stats();
+    assert.deepEqual({ teachers: end.teachers, courses: end.courses, sections: end.sections }, { teachers: first.teachers, courses: first.courses, sections: first.sections });
+
+    assert.equal((await call('GET', '/dashboard/stats', null, null)).status, 401);
+    assert.equal((await call('GET', '/dashboard/stats', null, studentToken)).status, 403);
+  });
 });

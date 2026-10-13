@@ -11,12 +11,10 @@ import StatCard from '../components/dashboard/StatCard'
 import PopulationChart from '../components/dashboard/PopulationChart'
 import RecentStudents from '../components/dashboard/RecentStudents'
 
-// No endpoints for these yet - dummy values until teachers/courses/sections exist.
-const DUMMY_TOTALS = { teachers: 120, courses: 45, sections: 88 }
-
 export default function Dashboard() {
   const { user } = useAuth()
   const [students, setStudents] = useState([])
+  const [totals, setTotals] = useState(null) // { students, teachers, courses, sections } counted by the server
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [academicYear, setAcademicYear] = useState('2026-2027')
@@ -26,12 +24,16 @@ export default function Dashboard() {
 
   useEffect(() => {
     const controller = new AbortController()
-    api
-      .get('/students', { signal: controller.signal })
-      .then((res) => setStudents(res.data))
+    // The recent-students list and chart need the students; the four headline cards are counted by the
+    // server from the database, so they always match what is saved.
+    Promise.all([api.get('/students', { signal: controller.signal }), api.get('/dashboard/stats', { signal: controller.signal })])
+      .then(([list, stats]) => {
+        setStudents(list.data)
+        setTotals(stats.data)
+      })
       .catch((err) => {
         if (err.code === 'ERR_CANCELED') return
-        setError(err.response?.data?.message || 'Could not load students. Is the backend running?')
+        setError(err.response?.data?.message || 'Could not load the dashboard. Is the backend running?')
       })
       .finally(() => {
         if (!controller.signal.aborted) setLoading(false)
@@ -45,11 +47,12 @@ export default function Dashboard() {
     setAttempt((n) => n + 1)
   }
 
+  const count = (key) => (error || !totals ? '—' : totals[key])
   const stats = [
-    { label: 'Total Students', value: error ? '—' : students.length, icon: PeopleAltOutlined, loading },
-    { label: 'Total Teachers', value: DUMMY_TOTALS.teachers, icon: SchoolOutlined },
-    { label: 'Total Courses', value: DUMMY_TOTALS.courses, icon: MenuBookOutlined },
-    { label: 'Total Sections', value: DUMMY_TOTALS.sections, icon: GridViewOutlined },
+    { label: 'Total Students', value: count('students'), icon: PeopleAltOutlined, loading },
+    { label: 'Total Teachers', value: count('teachers'), icon: SchoolOutlined, loading },
+    { label: 'Total Courses', value: count('courses'), icon: MenuBookOutlined, loading },
+    { label: 'Total Sections', value: count('sections'), icon: GridViewOutlined, loading },
   ]
 
   return (

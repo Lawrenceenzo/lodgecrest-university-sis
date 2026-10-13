@@ -11,7 +11,7 @@ const authenticate = require('../middleware/auth');
 const requireRole = require('../middleware/roles');
 
 const router = express.Router();
-router.use(['/courses', '/subjects', '/teachers', '/sections'], authenticate, requireRole('admin'));
+router.use(['/courses', '/subjects', '/teachers', '/sections', '/dashboard'], authenticate, requireRole('admin'));
 
 const validId = (id) => typeof id === 'string' && mongoose.isValidObjectId(id);
 const notFound = (res, what) => res.status(404).json({ message: `${what} not found` });
@@ -29,6 +29,25 @@ function num(v) {
   if (v === undefined || v === null || v === '') return undefined;
   return typeof v === 'number' ? v : typeof v === 'string' && v.trim() !== '' ? Number(v) : Number.NaN;
 }
+
+// ---------------------------------------------------------------------------------------------
+// Dashboard totals
+// ---------------------------------------------------------------------------------------------
+
+// GET /api/dashboard/stats -> the headline counts, straight from the collections on every request.
+//   students: enrolled-in-the-system students (archived and transferred ones are not counted, the same
+//   rule as the default Students list), teachers / courses / sections: every record saved.
+router.get('/dashboard/stats', async (req, res) => {
+  const [students, teachers, activeTeachers, courses, sections] = await Promise.all([
+    Student.countDocuments({ academicStatus: { $nin: INACTIVE } }),
+    Teacher.countDocuments(),
+    Teacher.countDocuments({ status: 'Active' }),
+    Course.countDocuments(),
+    Section.countDocuments(),
+  ]);
+  res.set('Cache-Control', 'no-store'); // a count that is a minute old is a wrong count
+  res.json({ students, teachers, activeTeachers, courses, sections });
+});
 
 // ---------------------------------------------------------------------------------------------
 // Courses
