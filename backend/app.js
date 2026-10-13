@@ -14,16 +14,18 @@ const { UPLOAD_DIR } = require('./middleware/upload');
 
 const app = express();
 
-// Vite dev server runs on 5173 by default.
+// Browsers may call the API only from these origins: the deployed site, the Vite dev server, and anything
+// listed in CLIENT_ORIGIN (comma-separated, e.g. a Vercel preview URL). Trailing slashes are ignored.
+const allowedOrigins = [
+  'https://lodgecrest-university-sis.vercel.app',
+  'http://localhost:5173',
+  ...String(process.env.CLIENT_ORIGIN || '').split(','),
+]
+  .map((o) => o.trim().replace(/\/+$/, ''))
+  .filter(Boolean);
+
 // Content-Disposition is exposed so the portal can read the file name of a downloaded transcript.
-app.use(cors({
-  origin: [
-    'https://lodgecrest-university-sis.vercel.app',
-    'http://localhost:5173',
-    process.env.CLIENT_ORIGIN
-  ].filter(Boolean),
-  credentials: true
-}));
+app.use(cors({ origin: allowedOrigins, credentials: true, exposedHeaders: ['Content-Disposition'] }));
 app.use(express.json());
 
 // Uploaded student photos, e.g. GET /uploads/<uuid>.png. Names are random, only images are ever
@@ -58,7 +60,8 @@ app.use('/portal', portalRoutes);
 app.use('/api/portal', portalRoutes);
 
 app.use('/', recordRoutes);
-app.use('/api', catalogRoutes); // admin catalog: courses, subjects, teachers, sections
+app.use('/', catalogRoutes); // admin catalog: courses, subjects, teachers, sections (also without the /api prefix, like the rest)
+app.use('/api', catalogRoutes);
 app.use('/api', recordRoutes);
 
 app.use((req, res) => res.status(404).json({ message: 'Route not found' }));

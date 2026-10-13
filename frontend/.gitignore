@@ -22,3 +22,7 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# local environment (the API address differs per machine; production sets it in Vercel)
+.env
+.env.local
