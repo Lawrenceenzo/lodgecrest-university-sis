@@ -139,4 +139,27 @@ describe('mailer', () => {
     await assert.rejects(loadMailer().sendOtpEmail(user, '777889'), /not configured/);
     assert.doesNotMatch(banner(), /777889/);
   });
+
+  test('a password-reset code says so in the e-mail, and in the log banner when the mail cannot be sent', async () => {
+    const mails = [];
+    sendMail = async (m) => mails.push(m);
+    await loadMailer().sendOtpEmail(user, '246810', { purpose: 'reset' });
+    assert.match(mails[0].subject, /password reset code is 246810/);
+    assert.match(mails[0].text, /reset your password: 246810/);
+    assert.match(mails[0].text, /your password has not changed/);
+    assert.equal(log.length, 0);
+
+    sendMail = async () => {
+      throw timeout();
+    };
+    await loadMailer().sendOtpEmail(user, '135790', { purpose: 'reset' });
+    assert.match(banner(), /PASSWORD RESET CODE\s+>>>\s+135790\s+<<</);
+    assert.doesNotMatch(banner(), /LOGIN CODE/);
+
+    // The default is still the sign-in wording.
+    mails.length = 0;
+    sendMail = async (m) => mails.push(m);
+    await loadMailer().sendOtpEmail(user, '111111');
+    assert.match(mails[0].subject, /verification code is 111111/);
+  });
 });

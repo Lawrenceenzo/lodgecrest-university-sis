@@ -46,6 +46,18 @@ export function AuthProvider({ children }) {
     return data.user
   }, [])
 
+  // Forgot password: step 1 asks the server to email a reset code (it answers the same for every address).
+  const requestPasswordReset = useCallback(async (email) => {
+    const { data } = await api.post('/auth/forgot-password', { email })
+    return data // { message, expiresInSeconds, resendAfterSeconds }
+  }, [])
+
+  // Step 2: the code and a new password. The user then signs in again as usual.
+  const resetPassword = useCallback(async (email, otp, newPassword) => {
+    const { data } = await api.post('/auth/reset-password', { email, otp, newPassword })
+    return data
+  }, [])
+
   // Changes your own display name (the only part of the account you may edit); returns the updated user.
   const updateName = useCallback(async (name) => {
     const { data } = await api.patch('/auth/me', { name })
@@ -59,8 +71,8 @@ export function AuthProvider({ children }) {
   }, [])
 
   const value = useMemo(
-    () => ({ user, loading, requestOtp, verifyOtp, changePassword, updateName, logout }),
-    [user, loading, requestOtp, verifyOtp, changePassword, updateName, logout],
+    () => ({ user, loading, requestOtp, verifyOtp, changePassword, requestPasswordReset, resetPassword, updateName, logout }),
+    [user, loading, requestOtp, verifyOtp, changePassword, requestPasswordReset, resetPassword, updateName, logout],
   )
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
 }

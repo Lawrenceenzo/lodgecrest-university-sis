@@ -44,13 +44,13 @@ const UNREACHABLE = new Set(['ETIMEDOUT', 'ESOCKET', 'ECONNECTION', 'ECONNREFUSE
 let skipSmtpUntil = 0;
 
 // Plain-text banner with the code in it. Plain on purpose: log viewers print raw escape codes badly.
-function printCodeBanner(email, otp, reason) {
+function printCodeBanner(email, otp, reason, label = 'LOGIN CODE') {
   const bar = '='.repeat(60);
   console.log(
     [
       '',
       bar,
-      `  LOGIN CODE  >>>  ${otp}  <<<`,
+      `  ${label}  >>>  ${otp}  <<<`,
       `  for ${email}  (valid ${OTP_MINUTES} minutes)`,
       reason ? `  ${reason}` : '',
       bar,
@@ -85,17 +85,20 @@ function sendWithDeadline(mail) {
 
 // Sends the code. Resolves once the user can proceed (mailed, or printed to the log). Rejects only when
 // the e-mail failed AND the console fallback is switched off.
-async function sendOtpEmail({ name, email }, otp) {
+// `purpose` is 'login' (the default) or 'reset' (password recovery); it only changes the wording.
+async function sendOtpEmail({ name, email }, otp, { purpose = 'login' } = {}) {
   const fallback = consoleFallback();
+  const reset = purpose === 'reset';
+  const label = reset ? 'PASSWORD RESET CODE' : 'LOGIN CODE';
 
   if (!emailConfigured()) {
     if (!fallback) throw new Error('Email is not configured and OTP_CONSOLE_FALLBACK is off');
-    printCodeBanner(email, otp, 'E-mail is not configured, so the code is shown here.');
+    printCodeBanner(email, otp, 'E-mail is not configured, so the code is shown here.', label);
     return;
   }
 
   if (Date.now() < skipSmtpUntil && fallback) {
-    printCodeBanner(email, otp, 'Mail server was unreachable a moment ago, so the code is shown here.');
+    printCodeBanner(email, otp, 'Mail server was unreachable a moment ago, so the code is shown here.', label);
     return;
   }
 
@@ -103,15 +106,17 @@ async function sendOtpEmail({ name, email }, otp) {
     await sendWithDeadline({
       from: `"${brand.name}" <${process.env.EMAIL_USER}>`,
       to: email,
-      subject: `${brand.name}: your verification code is ${otp}`,
-      text: `Hi ${name},\n\nYour verification code is ${otp}.\nIt expires in ${OTP_MINUTES} minutes.`,
+      subject: reset ? `${brand.name}: your password reset code is ${otp}` : `${brand.name}: your verification code is ${otp}`,
+      text: reset
+        ? `Hi ${name},\n\nUse this code to reset your password: ${otp}.\nIt expires in ${OTP_MINUTES} minutes. If you did not ask for it, ignore this email: your password has not changed.`
+        : `Hi ${name},\n\nYour verification code is ${otp}.\nIt expires in ${OTP_MINUTES} minutes.`,
       html: `
         <div style="font-family:Arial,sans-serif;max-width:420px;margin:auto;padding:24px;border:1px solid #e3e7ef;border-radius:8px">
           <h2 style="margin:0 0 4px;color:${brand.navy};font-family:Georgia,serif">${brand.name}</h2>
           <p style="margin:0 0 12px;color:#8a6a2c;font-size:11px;letter-spacing:2px;text-transform:uppercase">${brand.system}</p>
-          <p style="color:#444">Hi ${name.replace(/[<>&"]/g, '')}, use this code to finish signing in:</p>
+          <p style="color:#444">Hi ${name.replace(/[<>&"]/g, '')}, ${reset ? 'use this code to reset your password:' : 'use this code to finish signing in:'}</p>
           <p style="font-size:32px;letter-spacing:8px;font-weight:bold;color:${brand.navy};margin:16px 0">${otp}</p>
-          <p style="color:#666;font-size:13px">It expires in ${OTP_MINUTES} minutes.</p>
+          <p style="color:#666;font-size:13px">It expires in ${OTP_MINUTES} minutes.${reset ? ' If you did not ask for this, ignore this email: your password has not changed.' : ''}</p>
         </div>`,
     });
   } catch (err) {
@@ -128,7 +133,7 @@ async function sendOtpEmail({ name, email }, otp) {
         : `E-mail failed: ${err.message}`;
     console.error(`[mailer] ${why}`);
     if (!fallback) throw err;
-    printCodeBanner(email, otp, why);
+    printCodeBanner(email, otp, why, label);
   }
 }
 

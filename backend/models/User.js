@@ -51,6 +51,12 @@ const userSchema = new mongoose.Schema(
     otp: { type: String, select: false },
     otpExpires: { type: Date, select: false },
     otpAttempts: { type: Number, default: 0, select: false },
+
+    // Password recovery code ("Forgot password"). Kept apart from the login code above so a code meant for
+    // one purpose can never be used for the other. Same rules: hashed, 5 minutes, 5 wrong guesses, single use.
+    resetOtp: { type: String, select: false },
+    resetOtpExpires: { type: Date, select: false },
+    resetOtpAttempts: { type: Number, default: 0, select: false },
   },
   {
     timestamps: true,
@@ -64,6 +70,9 @@ const userSchema = new mongoose.Schema(
         delete ret.otp;
         delete ret.otpExpires;
         delete ret.otpAttempts;
+        delete ret.resetOtp;
+        delete ret.resetOtpExpires;
+        delete ret.resetOtpAttempts;
         delete ret.passwordChangedAt;
         delete ret.tokenVersion;
         ret.roleLabel = ROLE_LABELS[ret.role] || ret.role;

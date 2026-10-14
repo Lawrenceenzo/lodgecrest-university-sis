@@ -2,6 +2,7 @@ const express = require('express');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
+const { EMAIL_RE } = User;
 const authenticate = require('../middleware/auth');
 const requireRole = require('../middleware/roles');
 const { passwordProblems } = require('../utils/password');
@@ -129,6 +130,91 @@ router.post('/verify-otp', async (req, res) => {
   if (!consumed) return invalid();
 
   res.json({ token: signToken(user), user: user.toJSON() });
+});
+
+// ---------------------------------------------------------------------------------------------
+// Forgot password: ask for a code by email, then send it back with a new password.
+// ---------------------------------------------------------------------------------------------
+
+const clearResetOtp = (id) => User.updateOne({ _id: id }, { $unset: { resetOtp: 1, resetOtpExpires: 1 }, $set: { resetOtpAttempts: 0 } });
+
+// POST /api/auth/forgot-password  { email }
+// ALWAYS answers the same way, whether or not the email belongs to an account (and whether or not a code was
+// sent), so this cannot be used to find out who has an account. The e-mail itself is sent in the background
+// for the same reason: an unknown address must not answer faster than a known one.
+router.post('/forgot-password', async (req, res) => {
+  const email = normalizeEmail(req.body?.email);
+  if (!email || email.length > 100 || !EMAIL_RE.test(email)) return res.status(400).json({ message: 'Enter a valid email address' });
+
+  const user = await User.findOne({ email }).select('+resetOtpExpires');
+  // Students who are archived or transferred have no portal access, so there is nothing to recover.
+  if (user && !(await portalAccessProblem(user))) {
+    // A code was issued moments ago: keep it (and don't flood the inbox) but answer as usual.
+    const issuedAt = user.resetOtpExpires ? user.resetOtpExpires.getTime() - OTP_TTL_MS : 0;
+    if (Date.now() - issuedAt >= OTP_RESEND_COOLDOWN_MS) {
+      const otp = generateOtp();
+      await User.updateOne(
+        { _id: user._id },
+        { $set: { resetOtp: hashOtp(email, otp, 'reset'), resetOtpExpires: new Date(Date.now() + OTP_TTL_MS), resetOtpAttempts: 0 } },
+      );
+      sendOtpEmail(user, otp, { purpose: 'reset' }).catch((err) => console.error('Could not send the password reset code:', err.message));
+    }
+  }
+
+  res.json({
+    message: 'If that email belongs to an account, a reset code has been sent to it.',
+    expiresInSeconds: OTP_TTL_MS / 1000,
+    resendAfterSeconds: OTP_RESEND_COOLDOWN_MS / 1000,
+  });
+});
+
+// POST /api/auth/reset-password  { email, otp, newPassword }
+// A wrong, expired, used or never-issued code all answer the same "Invalid or expired code".
+router.post('/reset-password', async (req, res) => {
+  const email = normalizeEmail(req.body?.email);
+  const { otp, newPassword } = req.body || {};
+  if (!email || typeof otp !== 'string' || !/^\d{6}$/.test(otp)) return res.status(400).json({ message: 'Enter the 6-digit code from your email' });
+  if (typeof newPassword !== 'string') return res.status(400).json({ message: 'Enter a new password' });
+  // Checked before the code is touched, so a typo in the new password does not use up an attempt.
+  const errors = passwordProblems(newPassword);
+  if (errors.length) return res.status(400).json({ message: 'Validation failed', errors });
+
+  const invalid = () => res.status(401).json({ message: 'Invalid or expired code' });
+  const user = await User.findOne({ email }).select('+resetOtp +resetOtpExpires +resetOtpAttempts');
+  if (!user || !user.resetOtp || !user.resetOtpExpires) return invalid();
+
+  if ((await portalAccessProblem(user)) || user.resetOtpExpires.getTime() < Date.now()) {
+    await clearResetOtp(user._id);
+    return invalid();
+  }
+  if (user.resetOtpAttempts >= OTP_MAX_ATTEMPTS) {
+    await clearResetOtp(user._id);
+    return res.status(429).json({ message: 'Too many incorrect attempts. Please request a new code.' });
+  }
+  if (!otpMatches(user.resetOtp, email, otp, 'reset')) {
+    const attemptsLeft = OTP_MAX_ATTEMPTS - (user.resetOtpAttempts + 1);
+    await User.updateOne({ _id: user._id }, { $inc: { resetOtpAttempts: 1 } });
+    return res.status(401).json({
+      message: attemptsLeft > 0 ? `Invalid code. ${attemptsLeft} attempt${attemptsLeft === 1 ? '' : 's'} left.` : 'Too many incorrect attempts. Please request a new code.',
+      attemptsLeft,
+    });
+  }
+
+  // Use the code and change the password in ONE atomic update: the code works once, even with parallel requests.
+  // Every earlier session ends (tokenVersion), any pending login code is dropped, and a temporary password is
+  // no longer "temporary" because the user has now chosen their own.
+  const hash = await bcrypt.hash(newPassword, BCRYPT_ROUNDS);
+  const changed = await User.findOneAndUpdate(
+    { _id: user._id, resetOtp: user.resetOtp },
+    {
+      $set: { password: hash, mustChangePassword: false, passwordChangedAt: new Date(), resetOtpAttempts: 0, otpAttempts: 0 },
+      $unset: { resetOtp: 1, resetOtpExpires: 1, otp: 1, otpExpires: 1 },
+      $inc: { tokenVersion: 1 },
+    },
+  );
+  if (!changed) return invalid();
+
+  res.json({ message: 'Your password has been updated. You can now sign in.' });
 });
 
 // POST /api/auth/register  { name, email, password } -> new user (no password in response)

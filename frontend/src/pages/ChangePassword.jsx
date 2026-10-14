@@ -6,6 +6,7 @@ import ConfirmModal from '../components/ui/ConfirmModal'
 import TextField from '../components/ui/TextField'
 import Logo from '../components/Logo'
 import { useAuth } from '../context/AuthContext'
+import { passwordProblem } from '../utils/password'
 import { homeFor } from '../utils/roles'
 
 // Mirrors the server's rules (utils/password.js).
@@ -13,8 +14,7 @@ function validate({ current, next, confirm }) {
   const e = {}
   if (!current) e.current = 'Enter your current password'
   if (!next) e.next = 'Enter a new password'
-  else if (next.length < 8) e.next = 'Use at least 8 characters'
-  else if (!/[A-Za-z]/.test(next) || !/\d/.test(next)) e.next = 'Include at least one letter and one number'
+  else if (passwordProblem(next)) e.next = passwordProblem(next)
   else if (next === current) e.next = 'Choose a password different from the current one'
   if (!confirm) e.confirm = 'Re-enter the new password'
   else if (confirm !== next) e.confirm = 'The passwords do not match'
