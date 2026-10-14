@@ -5,6 +5,7 @@
 // These tests ERASE the database they connect to, so the database name must contain "test"
 // (anything else is refused). Without MONGO_TEST_URI they are skipped.
 
+require('./_env'); // proofs of payment go to a temporary folder (see _env.js)
 const { describe, test, before, after } = require('node:test');
 const assert = require('node:assert/strict');
 const mongoose = require('mongoose');

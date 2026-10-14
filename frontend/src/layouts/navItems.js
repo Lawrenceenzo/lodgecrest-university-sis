@@ -2,6 +2,7 @@ import DashboardOutlined from '@mui/icons-material/DashboardOutlined'
 import PeopleOutlined from '@mui/icons-material/PeopleOutlined'
 import AssignmentOutlined from '@mui/icons-material/AssignmentOutlined'
 import HowToRegOutlined from '@mui/icons-material/HowToRegOutlined'
+import PaymentsOutlined from '@mui/icons-material/PaymentsOutlined'
 import MenuBookOutlined from '@mui/icons-material/MenuBookOutlined'
 import ListAltOutlined from '@mui/icons-material/ListAltOutlined'
 import GridViewOutlined from '@mui/icons-material/GridViewOutlined'
@@ -15,6 +16,7 @@ export const navItems = [
   { label: 'Students', path: '/students', icon: PeopleOutlined },
   { label: 'Enrollment', path: '/enrollment', icon: AssignmentOutlined },
   { label: 'Pre-Enrollment', path: '/pre-enrollments', icon: HowToRegOutlined, badge: 'pendingPreEnrollments' },
+  { label: 'Payments', path: '/payments', icon: PaymentsOutlined, badge: 'pendingPayments' },
   { label: 'Courses', path: '/courses', icon: MenuBookOutlined },
   { label: 'Subjects', path: '/subjects', icon: ListAltOutlined },
   { label: 'Sections', path: '/sections', icon: GridViewOutlined },

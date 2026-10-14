@@ -10,6 +10,7 @@ const recordRoutes = require('./routes/records');
 const portalRoutes = require('./routes/portal');
 const catalogRoutes = require('./routes/catalog');
 const preEnrollmentRoutes = require('./routes/preEnrollments');
+const paymentSubmissionRoutes = require('./routes/paymentSubmissions');
 const { UPLOAD_DIR } = require('./middleware/upload');
 
 const app = express();
@@ -53,6 +54,8 @@ app.use('/api/students', studentRoutes);
 app.use('/users', userRoutes);
 app.use('/api/users', userRoutes);
 
+app.use('/payment-submissions', paymentSubmissionRoutes);
+app.use('/api/payment-submissions', paymentSubmissionRoutes); // admin: verify the proofs of payment students send in
 app.use('/pre-enrollments', preEnrollmentRoutes);
 app.use('/api/pre-enrollments', preEnrollmentRoutes);
 
@@ -85,7 +88,8 @@ app.use((err, req, res, next) => {
   }
   if (err instanceof multer.MulterError) {
     const tooBig = err.code === 'LIMIT_FILE_SIZE';
-    return res.status(tooBig ? 413 : 400).json({ message: tooBig ? 'Photo must be 2 MB or smaller' : `Upload failed: ${err.message}` });
+    const what = err.field === 'proof' ? ['Proof of payment', '5 MB'] : ['Photo', '2 MB'];
+    return res.status(tooBig ? 413 : 400).json({ message: tooBig ? `${what[0]} must be ${what[1]} or smaller` : `Upload failed: ${err.message}` });
   }
   if (err.code === 'INVALID_FILE_TYPE') {
     return res.status(400).json({ message: err.message });

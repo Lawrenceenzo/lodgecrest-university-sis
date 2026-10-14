@@ -14,6 +14,7 @@ import StudentProfile from './pages/StudentProfile'
 import EditStudent from './pages/EditStudent'
 import Enrollment from './pages/Enrollment'
 import PreEnrollments from './pages/PreEnrollments'
+import PaymentSubmissions from './pages/PaymentSubmissions'
 import NewEnrollment from './pages/NewEnrollment'
 import Grades from './pages/Grades'
 import Attendance from './pages/Attendance'
@@ -53,6 +54,7 @@ export default function App() {
                   <Route path="/enrollment" element={<Enrollment />} />
                   <Route path="/enrollment/new" element={<NewEnrollment />} />
                   <Route path="/pre-enrollments" element={<PreEnrollments />} />
+                  <Route path="/payments" element={<PaymentSubmissions />} />
                   <Route path="/grades" element={<Grades />} />
                   <Route path="/users" element={<Users />} />
                   <Route path="/courses" element={<Courses />} />

@@ -1,6 +1,7 @@
 // Tests that the API answers on the paths the deployed front end uses, and that CORS lets the deployed site in.
 // No database is needed: every request here is turned away (401) before any data is read.
 
+require('./_env'); // proofs of payment go to a temporary folder (see _env.js)
 const { describe, test } = require('node:test');
 const assert = require('node:assert/strict');
 const http = require('node:http');

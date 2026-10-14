@@ -5,6 +5,7 @@
 // Like the other database tests, these ERASE the database they connect to (its name must contain "test").
 // No e-mail is configured here, so the mailer prints each code in a banner; the tests read it from there.
 
+require('./_env'); // proofs of payment go to a temporary folder (see _env.js)
 const { describe, test, before, after, beforeEach } = require('node:test');
 const assert = require('node:assert/strict');
 const http = require('node:http');

@@ -1,16 +1,34 @@
 import CheckCircleOutlined from '@mui/icons-material/CheckCircleOutlined'
 import ReportProblemOutlined from '@mui/icons-material/ReportProblemOutlined'
+import { useState } from 'react'
 import { useApiData } from '../../hooks/useApiData'
+import Alert from '../../components/ui/Alert'
+import Button from '../../components/ui/Button'
+import SubmissionsTable from '../../components/portal/payments/SubmissionsTable'
+import SubmitPaymentModal from '../../components/portal/payments/SubmitPaymentModal'
 import { Card, DataGate, PageTitle, Pill, Skeleton, Stat, StatusPill, TableBox } from '../../components/portal/PortalParts'
 import { td, th } from '../../components/portal/portalStyles'
 import { formatDay, peso } from '../../utils/records'
 
 export default function PortalAccounts() {
   const state = useApiData('/portal/accounts')
+  const payments = useApiData('/portal/payments')
+  const [submitting, setSubmitting] = useState(false)
+  const [sent, setSent] = useState(false)
 
   return (
     <div className="flex flex-col gap-6">
-      <PageTitle title="Clearance & Accounts" subtitle="Your balance, what you have paid, and any holds on your record." />
+      <PageTitle
+        title="Clearance & Accounts"
+        subtitle="Your balance, what you have paid, and any holds on your record."
+        action={
+          <Button variant="gold" onClick={() => setSubmitting(true)} disabled={!payments.data}>
+            Submit payment
+          </Button>
+        }
+      />
+
+      {sent && <Alert tone="success">Payment submitted. The Registrar&apos;s office will check your proof. Its status appears under &ldquo;My payment submissions&rdquo;.</Alert>}
 
       <DataGate state={state} skeleton={<Skeleton className="h-96" />}>
         {(d) => (
@@ -126,9 +144,25 @@ export default function PortalAccounts() {
                 <Pill tone="gold">Tip</Pill> Keep your official receipts. To pay or dispute a charge, visit the Cashier&apos;s Office; this page is read-only.
               </p>
             </Card>
+            <DataGate state={payments} skeleton={<Skeleton className="h-40" />}>
+              {(p) => <SubmissionsTable submissions={p.submissions} />}
+            </DataGate>
           </>
         )}
       </DataGate>
+
+      {submitting && payments.data && (
+        <SubmitPaymentModal
+          methods={payments.data.methods}
+          balance={state.data?.balance ?? 0}
+          onClose={() => setSubmitting(false)}
+          onSubmitted={() => {
+            setSubmitting(false)
+            setSent(true)
+            payments.reload()
+          }}
+        />
+      )}
     </div>
   )
 }

@@ -3,3 +3,6 @@ node_modules
 # uploaded photos (keep the folder, ignore its contents)
 public/uploads/*
 !public/uploads/.gitkeep
+# proofs of payment: private files, never served statically
+private/payment-proofs/*
+!private/payment-proofs/.gitkeep

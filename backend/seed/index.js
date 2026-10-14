@@ -12,10 +12,13 @@ const seedStudents = require('../data/seedStudents');
 const brand = require('../config/brand');
 const { BASE_COURSES, EXTRA_COURSES } = require('../config/baseCatalog');
 const { UPLOAD_DIR } = require('../middleware/upload');
+const { PROOF_DIR } = require('../middleware/uploadProof');
+const { receiptPng } = require('../utils/samplePng');
+const crypto = require('crypto');
 const { SUBJECTS, SLOTS } = require('./curriculum');
 const { makeRng, PROFESSORS, TIME_SLOTS } = require('../config/timetable');
 
-const { Student, User, Course, Term, Subject, Offering, Enrollment, Grade, Attendance, Charge, Payment, Hold, PreEnrollment, Teacher, Section } = models;
+const { Student, User, Course, Term, Subject, Offering, Enrollment, Grade, Attendance, Charge, Payment, Hold, PreEnrollment, PaymentSubmission, Teacher, Section } = models;
 
 // ----------------------------------------------------------------------------------------------
 // Helpers
@@ -50,6 +53,10 @@ async function clearEverything() {
   // Photos belonged to the students just deleted, so remove them too (keeps .gitkeep).
   for (const file of fs.readdirSync(UPLOAD_DIR)) {
     if (file !== '.gitkeep') fs.unlinkSync(path.join(UPLOAD_DIR, file));
+  }
+  // Proofs of payment belonged to the submissions just deleted.
+  for (const file of fs.readdirSync(PROOF_DIR)) {
+    if (file !== '.gitkeep') fs.unlinkSync(path.join(PROOF_DIR, file));
   }
   await Promise.all(Object.values(models).map((Model) => Model.syncIndexes()));
 }
@@ -302,6 +309,32 @@ async function runSeed({ log = console.log } = {}) {
   });
   await PreEnrollment.insertMany(requestInputs);
 
+  // ---- Payments students have sent in with a proof (two waiting, one refused) ---------------------------
+  const writeProof = (amountText, accent) => {
+    const name = `${crypto.randomUUID()}.png`;
+    fs.writeFileSync(path.join(PROOF_DIR, name), receiptPng(amountText, accent));
+    return name;
+  };
+  const ago = (days) => new Date(Date.now() - days * 86400000);
+  const dayOf = (days) => ago(days).toISOString().slice(0, 10);
+  await PaymentSubmission.insertMany(
+    [
+      { number: '2026-0001', amount: 3000, method: 'GCash', referenceNo: 'GC-7741-0092', days: 1, text: '3,000.00', accent: [0, 112, 224] },
+      { number: '2026-0003', amount: 2500, method: 'Bank Transfer', referenceNo: 'BT-2210-5531', days: 2, text: '2,500.00', accent: [15, 32, 75] },
+      { number: '2026-0001', amount: 5000, method: 'Bank Transfer', referenceNo: 'BT-5560-ABCD', days: 6, text: '500.00', accent: [15, 32, 75], rejected: 'The amount on the receipt (PHP 500.00) does not match the PHP 5,000.00 you entered. Please upload the correct receipt.' },
+    ].map((x) => ({
+      student: studentByNumber[x.number]._id,
+      term: terms[CURRENT]._id,
+      amount: x.amount,
+      method: x.method,
+      referenceNo: x.referenceNo,
+      paidOn: dayOf(x.days),
+      proof: writeProof(x.text, x.accent),
+      submittedAt: ago(x.days),
+      ...(x.rejected && { status: 'Rejected', reason: x.rejected, decidedAt: ago(x.days - 1), decidedBy: admin._id }),
+    })),
+  );
+
   // ---- Holds ----------------------------------------------------------------------------------------------
   await Hold.insertMany([
     { student: studentByNumber['2026-0001']._id, type: 'Library', reason: 'Unreturned book: "Introduction to Algorithms" (due Sep 15)', placedBy: admin._id, placedAt: utc(2026, 8, 20) },
@@ -324,6 +357,7 @@ async function runSeed({ log = console.log } = {}) {
     teachers: teacherDocs.length,
     sections: sectionKeys.length,
     'pre-enrollment requests': requestInputs.length,
+    'payment submissions': 3,
   };
   log(`Seeded: ${Object.entries(summary).map(([k, v]) => `${v} ${k}`).join(', ')}.`);
   log(`Admin sign-in:   ${adminEmail} (${process.env.SEED_ADMIN_PASSWORD ? 'password from SEED_ADMIN_PASSWORD' : 'password: admin123'})`);

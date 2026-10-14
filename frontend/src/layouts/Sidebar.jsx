@@ -31,7 +31,10 @@ export default function Sidebar({ onNavigate }) {
   const [confirmingLogout, setConfirmingLogout] = useState(false)
   // How many pre-enrollment requests are waiting; re-asked whenever the admin moves to another page.
   const { pathname } = useLocation()
-  const waiting = useApiData('/pre-enrollments/summary', { at: pathname }).data?.pending ?? 0
+  const waiting = {
+    pendingPreEnrollments: useApiData('/pre-enrollments/summary', { at: pathname }).data?.pending ?? 0,
+    pendingPayments: useApiData('/payment-submissions/summary', { at: pathname }).data?.pending ?? 0,
+  }
 
   return (
     <Box
@@ -54,7 +57,7 @@ export default function Sidebar({ onNavigate }) {
               <Icon fontSize="small" />
             </ListItemIcon>
             <ListItemText slotProps={{ primary: { fontSize: 14, fontWeight: 'inherit' } }} primary={label} />
-            {badge && waiting > 0 && <Badge badgeContent={waiting} color="secondary" max={99} sx={{ mr: 1.5, '& .MuiBadge-badge': { color: NAVY_DARK, fontWeight: 700, position: 'static', transform: 'none' } }} aria-label={`${waiting} waiting`} />}
+            {badge && waiting[badge] > 0 && <Badge badgeContent={waiting[badge]} color="secondary" max={99} sx={{ mr: 1.5, '& .MuiBadge-badge': { color: NAVY_DARK, fontWeight: 700, position: 'static', transform: 'none' } }} aria-label={`${waiting[badge]} waiting`} />}
           </ListItemButton>
         ))}
       </List>

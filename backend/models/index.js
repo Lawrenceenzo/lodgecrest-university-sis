@@ -14,6 +14,7 @@ module.exports = {
   Payment: require('./Payment'),
   Hold: require('./Hold'),
   PreEnrollment: require('./PreEnrollment'),
+  PaymentSubmission: require('./PaymentSubmission'),
   Teacher: require('./Teacher'),
   Section: require('./Section'),
 };

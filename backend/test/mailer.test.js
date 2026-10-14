@@ -1,6 +1,7 @@
 // Tests for the login-code mailer: no network at start-up, a bounded wait when SMTP is blocked, and the
 // log banner fallback. The mail transport is replaced with a stub, so nothing here sends e-mail.
 
+require('./_env'); // proofs of payment go to a temporary folder (see _env.js)
 const { describe, test, beforeEach, afterEach } = require('node:test');
 const assert = require('node:assert/strict');
 const nodemailer = require('nodemailer');

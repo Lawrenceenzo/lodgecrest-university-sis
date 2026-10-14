@@ -1,5 +1,5 @@
 // The student portal API: always about the signed-in student. Everything is read-only except
-// pre-enrollment (submit or cancel your own request).
+// pre-enrollment (submit or cancel your own request) and sending in a proof of payment.
 //
 // Who the student is comes ONLY from the login: `authenticate` loads the user from the token and
 // `req.user.student` is the Student linked to that account. No route here takes a student id (or any
@@ -8,7 +8,7 @@
 
 const express = require('express');
 const mongoose = require('mongoose');
-const { Student, Term, Subject, Offering, PreEnrollment, Attendance, Charge, Payment, Hold } = require('../models');
+const { Student, Term, Subject, Offering, PreEnrollment, PaymentSubmission, Attendance, Charge, Payment, Hold } = require('../models');
 const authenticate = require('../middleware/auth');
 const requireRole = require('../middleware/roles');
 const { computeStanding } = require('../services/gwa');
@@ -17,6 +17,8 @@ const { termJson, loadRows, groupByTerm, standingInput, describeStanding } = req
 const { buildTranscript } = require('../services/transcript');
 const BRAND = require('../config/brand');
 const pre = require('../services/preEnrollment');
+const { uploadProof, proofPath, removeProof, TYPES: PROOF_TYPES } = require('../middleware/uploadProof');
+const { SUBMISSION_METHODS } = require('../models/PaymentSubmission');
 
 const router = express.Router();
 router.use(authenticate, requireRole('student'));
@@ -270,6 +272,95 @@ router.get('/transcript.pdf', async (req, res) => {
     'Content-Disposition': `attachment; filename="UNOFFICIAL-Transcript-${s.studentId}.pdf"`,
   });
   return res.send(pdf);
+});
+
+// ---- Payments: send in a proof of payment ---------------------------------------------------------
+const MAX_PENDING_SUBMISSIONS = 5; // stops a student from flooding the queue
+const dayText = (d) => d.toISOString().slice(0, 10);
+
+const submissionJson = (p) => ({
+  id: String(p._id),
+  amount: p.amount,
+  method: p.method,
+  referenceNo: p.referenceNo,
+  paidOn: p.paidOn,
+  note: p.note,
+  status: p.status,
+  reason: p.status === 'Rejected' ? p.reason : '',
+  submittedAt: p.submittedAt,
+  decidedAt: p.decidedAt,
+});
+
+// GET /api/portal/payments -> my submissions, newest first, with where each one stands
+router.get('/payments', async (req, res) => {
+  const s = await mine(req, res);
+  if (!s) return undefined;
+  const rows = await PaymentSubmission.find({ student: s._id }).sort({ submittedAt: -1 }).limit(100);
+  return res.json({ methods: SUBMISSION_METHODS, maxPending: MAX_PENDING_SUBMISSIONS, submissions: rows.map(submissionJson) });
+});
+
+// POST /api/portal/payments  (multipart/form-data)  amount, method, referenceNo, paidOn?, note?, proof (JPG or PNG)
+// This only RECORDS the claim as Pending. The balance changes when an administrator approves it.
+router.post('/payments', uploadProof, async (req, res) => {
+  const file = req.file;
+  const fail = async (status, message, errors) => {
+    if (file) await removeProof(file.filename); // never keep a file for a request that was refused
+    return res.status(status).json(errors ? { message, errors } : { message });
+  };
+
+  const s = await mine(req, res);
+  if (!s) {
+    if (file) await removeProof(file.filename);
+    return undefined;
+  }
+  const b = req.body || {};
+  const errors = [];
+  if (!file) errors.push('Attach a photo or screenshot of your proof of payment (JPG or PNG)');
+  const amount = typeof b.amount === 'string' && b.amount.trim() !== '' ? Number(b.amount) : Number.NaN;
+  if (!Number.isFinite(amount) || amount <= 0) errors.push('Enter the amount you paid');
+  const method = typeof b.method === 'string' ? b.method : '';
+  if (!SUBMISSION_METHODS.includes(method)) errors.push('Choose how you paid');
+  const referenceNo = typeof b.referenceNo === 'string' ? b.referenceNo.trim() : '';
+  if (!referenceNo) errors.push('Enter the reference number from your receipt');
+  const today = dayText(new Date());
+  const paidOn = typeof b.paidOn === 'string' && b.paidOn.trim() ? b.paidOn.trim() : today;
+  if (paidOn > today) errors.push('The date paid cannot be in the future');
+  if (errors.length) return fail(400, 'Validation failed', errors);
+
+  if ((await PaymentSubmission.countDocuments({ student: s._id, status: 'Pending' })) >= MAX_PENDING_SUBMISSIONS) {
+    return fail(409, `You already have ${MAX_PENDING_SUBMISSIONS} payments waiting for verification. Wait for the office to review them first.`);
+  }
+  const current = await Term.findOne({ isCurrent: true }).select('_id');
+  try {
+    const created = await PaymentSubmission.create({
+      student: s._id,
+      term: current?._id,
+      amount,
+      method,
+      referenceNo,
+      paidOn,
+      note: typeof b.note === 'string' ? b.note : '',
+      proof: file.filename,
+    });
+    return res.status(201).json(submissionJson(created));
+  } catch (err) {
+    if (err.code === 11000) return fail(409, 'That reference number has already been submitted. If you made a second payment, it has its own reference number.');
+    if (err.name === 'ValidationError') return fail(400, 'Validation failed', Object.values(err.errors).map((e) => e.message));
+    await removeProof(file.filename);
+    throw err;
+  }
+});
+
+// GET /api/portal/payments/:id/proof -> the image I uploaded (only mine; there is no public address for it)
+router.get('/payments/:id/proof', async (req, res) => {
+  const s = await mine(req, res);
+  if (!s) return undefined;
+  const found = mongoose.isValidObjectId(req.params.id) ? await PaymentSubmission.findOne({ _id: req.params.id, student: s._id }).select('proof') : null;
+  const file = found && proofPath(found.proof);
+  if (!file) return res.status(404).json({ message: 'Proof of payment not found' });
+  return res.sendFile(file, { dotfiles: 'deny', cacheControl: false, headers: { 'Cache-Control': 'private, no-store', 'Content-Type': PROOF_TYPES[found.proof.endsWith('.png') ? 'image/png' : 'image/jpeg'].contentType, 'Content-Disposition': 'inline', 'X-Content-Type-Options': 'nosniff' } }, (err) => {
+    if (err && !res.headersSent) res.status(404).json({ message: 'Proof of payment not found' });
+  });
 });
 
 // ---- Pre-enrollment ----------------------------------------------------------------------------

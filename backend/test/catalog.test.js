@@ -6,6 +6,7 @@
 //
 // Like the other database tests, these ERASE the database they connect to (its name must contain "test").
 
+require('./_env'); // proofs of payment go to a temporary folder (see _env.js)
 const { describe, test, before, after } = require('node:test');
 const assert = require('node:assert/strict');
 const http = require('node:http');
