@@ -151,7 +151,9 @@ describe('catalog persistence', { skip }, () => {
     assert.equal((await Teacher.findOne({ employeeId: 'EMP-0009' })).name, "Dr. Ana O'Neil");
     assert.ok((await call('GET', '/teachers')).json.some((t) => t.email === 'ana.oneil@lodgecrest.edu'));
 
-    assert.equal((await call('POST', '/teachers', { name: 'Someone Else', department: 'X', email: 'ana.oneil@lodgecrest.edu' })).status, 409);
+    const dupe = await call('POST', '/teachers', { name: 'Someone Else', department: 'X', email: 'ana.oneil@lodgecrest.edu' });
+    assert.equal(dupe.status, 400);
+    assert.match(dupe.json.errors[0], /already used by another teacher/);
     for (const bad of [{}, { name: 'A', department: 'D', email: 'a@b.co' }, { name: '1234', department: 'D', email: 'ok@b.co' }, { name: 'Valid Name', department: 'D', email: 'not-an-email' }, { name: 'Valid Name', email: 'ok2@b.co' }]) {
       assert.equal((await call('POST', '/teachers', bad)).status, 400, JSON.stringify(bad));
     }
@@ -172,6 +174,45 @@ describe('catalog persistence', { skip }, () => {
     assert.equal((await call('DELETE', `/sections/${sec.json.id}`)).status, 200);
     assert.equal((await call('DELETE', `/teachers/${made.json.id}`)).status, 200);
     assert.equal(await Teacher.countDocuments({ employeeId: 'EMP-0009' }), 0);
+  });
+
+  test('teacher e-mails stay unique on add and on edit (letter case and spaces do not matter), with a clean 400', async () => {
+    const a = (await call('POST', '/teachers', { name: 'Unique One', department: 'College of Computing', email: 'unique.one@lodgecrest.edu' })).json;
+    const b = (await call('POST', '/teachers', { name: 'Unique Two', department: 'College of Computing', email: 'unique.two@lodgecrest.edu' })).json;
+
+    // Adding with an address that is taken, in different spellings.
+    for (const email of ['unique.one@lodgecrest.edu', 'UNIQUE.ONE@LODGECREST.EDU', '  Unique.One@Lodgecrest.edu  ']) {
+      const r = await call('POST', '/teachers', { name: 'Copy Cat', department: 'College of Computing', email });
+      assert.equal(r.status, 400, email);
+      assert.equal(r.json.message, 'Validation failed');
+      assert.deepEqual(r.json.errors, ['That email address is already used by another teacher.']);
+    }
+    assert.equal(await Teacher.countDocuments({ name: 'Copy Cat' }), 0, 'nothing was saved');
+
+    // Editing B to A's address is refused and B keeps its own.
+    const clash = await call('PUT', `/teachers/${b.id}`, { email: 'Unique.One@lodgecrest.edu' });
+    assert.equal(clash.status, 400);
+    assert.match(clash.json.errors[0], /already used by another teacher/);
+    assert.equal((await Teacher.findById(b.id)).email, 'unique.two@lodgecrest.edu');
+
+    // Saving a teacher with their OWN address (unchanged, or only the case changed) is not a clash.
+    assert.equal((await call('PUT', `/teachers/${b.id}`, { name: 'Unique Two Renamed', email: 'unique.two@lodgecrest.edu' })).status, 200);
+    const recased = await call('PUT', `/teachers/${b.id}`, { email: 'UNIQUE.TWO@lodgecrest.edu' });
+    assert.equal(recased.status, 200);
+    assert.equal(recased.json.email, 'unique.two@lodgecrest.edu');
+
+    // A free address is fine, and A can then take B's old one.
+    assert.equal((await call('PUT', `/teachers/${b.id}`, { email: 'unique.two.new@lodgecrest.edu' })).status, 200);
+    assert.equal((await call('PUT', `/teachers/${a.id}`, { email: 'unique.two@lodgecrest.edu' })).status, 200);
+
+    // Two requests with the same new address at once: exactly one wins, the other gets the same clean 400.
+    const results = await Promise.all(['One', 'Two', 'Three'].map((n) => call('POST', '/teachers', { name: `Racer ${n}`, department: 'College of Computing', email: 'racer@lodgecrest.edu' })));
+    assert.deepEqual(results.map((r) => r.status).sort(), [201, 400, 400]);
+    assert.equal(await Teacher.countDocuments({ email: 'racer@lodgecrest.edu' }), 1);
+
+    // Bad addresses are still ordinary validation errors.
+    assert.equal((await call('PUT', `/teachers/${a.id}`, { email: 'not-an-email' })).status, 400);
+    assert.equal((await call('PUT', `/teachers/${a.id}`, { email: '   ' })).status, 400);
   });
 
   test('sections: stored with their adviser, unique per program/year/letter, counted from real students', async () => {

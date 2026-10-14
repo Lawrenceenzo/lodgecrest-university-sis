@@ -16,7 +16,7 @@ const { termJson, meetingJson, loadRows, groupByTerm, standingInput, describeSta
 const router = express.Router();
 
 // This router is mounted at /api, so the guard is limited to the paths it owns.
-router.use(['/students', '/enrollments', '/attendance', '/charges', '/payments', '/holds', '/terms', '/offerings', '/sample-records'], authenticate, requireRole('admin'));
+router.use(['/students', '/enrollments', '/attendance', '/charges', '/payments', '/holds', '/terms', '/offerings', '/sample-records', '/grades'], authenticate, requireRole('admin'));
 
 // ---------------------------------------------------------------------------------------------
 // Small helpers
@@ -152,6 +152,64 @@ router.get('/students/:id/grades', async (req, res) => {
   const terms = groupByTerm(rows).map((g) => ({ term: g.term, rows: g.rows, standing: computeStanding(standingInput(g.rows)) }));
   const overall = describeStanding(computeStanding(standingInput(rows), { unitsRequired: student.program?.totalUnits ?? null }), rows);
   return res.json({ terms, overall });
+});
+
+// GET /api/grades?term=<id>&course=<code>&section=<A|B|C>&yearLevel=<1st Year...>
+// Every posted grade of a semester, for the students who match the filters (term defaults to the latest one with grades).
+// The summary is worked out from ALL matching grades, not just the rows sent, so it always agrees with the filters.
+// Filters apply to where each student is NOW (their course and section today). Archived and transferred students are left out.
+const GRADE_ROW_LIMIT = 1000;
+router.get('/grades', async (req, res) => {
+  const { course, section, yearLevel } = req.query;
+  const errors = [];
+  if (course !== undefined && course !== '' && !(typeof course === 'string' && /^[A-Za-z0-9]{2,12}$/.test(course))) errors.push('course is invalid');
+  if (section !== undefined && section !== '' && !(typeof section === 'string' && Student.SECTIONS.includes(section))) errors.push('section is invalid');
+  if (yearLevel !== undefined && yearLevel !== '' && !(typeof yearLevel === 'string' && Student.YEAR_LEVELS.includes(yearLevel))) errors.push('yearLevel is invalid');
+  if (errors.length) return res.status(400).json({ message: 'Validation failed', errors });
+
+  // No term chosen: the most recent semester that has grades (the current one is still in progress, so it is usually empty).
+  const latestGraded = async () => {
+    const withGrades = await Grade.distinct('term');
+    return (withGrades.length && (await Term.findOne({ _id: { $in: withGrades } }).sort({ startDate: -1 }))) || Term.findOne({ isCurrent: true });
+  };
+  const term = validId(req.query.term) ? await Term.findById(req.query.term) : await latestGraded();
+  const summary = { students: 0, records: 0, gwa: null, passed: 0, failed: 0, incomplete: 0, dropped: 0, passRate: null };
+  if (!term) return res.json({ term: null, summary, rows: [], truncated: false });
+
+  const filter = { academicStatus: { $nin: ['Archived', 'Transferred'] } };
+  if (course) filter.course = course;
+  if (section) filter.section = section;
+  if (yearLevel) filter.yearLevel = yearLevel;
+  const students = await Student.find(filter).select('studentId firstName lastName course yearLevel section');
+  const byId = new Map(students.map((s) => [String(s._id), s]));
+
+  const grades = await Grade.find({ term: term._id, student: { $in: [...byId.keys()] } }).populate('subject', 'code title units countsToGwa');
+  const standing = computeStanding(grades.map((g) => ({ subjectId: String(g.subject._id), units: g.subject.units, countsToGwa: g.subject.countsToGwa, value: g.value ?? null, mark: g.mark ?? null })));
+  summary.students = new Set(grades.map((g) => String(g.student))).size;
+  summary.records = grades.length;
+  summary.gwa = standing.gwa;
+  for (const g of grades) {
+    if (g.remark === 'Passed') summary.passed += 1;
+    else if (g.remark === 'Failed') summary.failed += 1;
+    else if (g.remark === 'Incomplete') summary.incomplete += 1;
+    else summary.dropped += 1;
+  }
+  summary.passRate = summary.passed + summary.failed ? Math.round((summary.passed / (summary.passed + summary.failed)) * 100) : null;
+
+  const rows = grades
+    .map((g) => {
+      const s = byId.get(String(g.student));
+      return {
+        id: String(g._id),
+        student: { id: String(s._id), studentId: s.studentId, name: `${s.lastName}, ${s.firstName}`, course: s.course, yearLevel: s.yearLevel, section: s.section },
+        subject: { code: g.subject.code, title: g.subject.title, units: g.subject.units, countsToGwa: g.subject.countsToGwa },
+        value: g.value ?? null,
+        mark: g.mark ?? null,
+        remark: g.remark,
+      };
+    })
+    .sort((a, b) => a.student.name.localeCompare(b.student.name) || a.subject.code.localeCompare(b.subject.code));
+  return res.json({ term: termJson(term), summary, rows: rows.slice(0, GRADE_ROW_LIMIT), truncated: rows.length > GRADE_ROW_LIMIT });
 });
 
 // POST /api/students/:id/enrollments  { offeringId, skipPrerequisites? }  -> enroll in a class

@@ -224,6 +224,13 @@ async function nextEmployeeId() {
   return `EMP-${String(n).padStart(4, '0')}`;
 }
 
+// Is this e-mail already on a teacher record? `exceptId` leaves out the teacher being edited, so saving a
+// teacher with their own unchanged address is fine. The comparison ignores letter case and spaces.
+const DUPLICATE_EMAIL = 'That email address is already used by another teacher.';
+const teacherEmailTaken = (email, exceptId) =>
+  Teacher.exists({ email: String(email).trim().toLowerCase(), ...(exceptId && { _id: { $ne: exceptId } }) });
+const isEmailDuplicateError = (err) => err.code === 11000 && 'email' in (err.keyPattern || {});
+
 // GET /api/teachers
 router.get('/teachers', async (req, res) => {
   res.json((await Teacher.find().sort({ name: 1 })).map(teacherJson));
@@ -232,11 +239,13 @@ router.get('/teachers', async (req, res) => {
 // POST /api/teachers  { name, department, email, contactNumber? }  (the employee id is assigned here)
 router.post('/teachers', async (req, res) => {
   const b = req.body || {};
+  if (str(b.email) && (await teacherEmailTaken(b.email))) return bad(res, DUPLICATE_EMAIL);
   for (let attempt = 0; attempt < 3; attempt += 1) {
     try {
       const teacher = await Teacher.create({ employeeId: await nextEmployeeId(), name: str(b.name), department: str(b.department), email: str(b.email), contactNumber: str(b.contactNumber) ?? '' });
       return res.status(201).json(teacherJson(teacher));
     } catch (err) {
+      if (isEmailDuplicateError(err)) return bad(res, DUPLICATE_EMAIL); // two requests with the same address at once
       // two teachers added at the same instant can pick the same number: try the next one
       if (!(err.code === 11000 && 'employeeId' in (err.keyPattern || {}) && attempt < 2)) throw err;
     }
@@ -251,11 +260,17 @@ router.put('/teachers/:id', async (req, res) => {
   if (!teacher) return notFound(res, 'Teacher');
   const b = req.body || {};
   if (str(b.employeeId) && str(b.employeeId) !== teacher.employeeId) return bad(res, 'employeeId cannot be changed');
+  if (str(b.email) && (await teacherEmailTaken(b.email, teacher._id))) return bad(res, DUPLICATE_EMAIL);
   for (const key of ['name', 'department', 'email', 'contactNumber', 'status']) if (str(b[key]) !== undefined) teacher[key] = str(b[key]);
   if (teacher.status === 'Inactive' && (await Section.exists({ adviser: teacher._id }))) {
     return conflict(res, `${teacher.name} still advises a section. Give that section another adviser first.`);
   }
-  await teacher.save();
+  try {
+    await teacher.save();
+  } catch (err) {
+    if (isEmailDuplicateError(err)) return bad(res, DUPLICATE_EMAIL); // someone took the address a moment ago
+    throw err;
+  }
   return res.json(teacherJson(teacher));
 });
 
